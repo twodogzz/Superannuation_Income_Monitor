@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-lg-7">
+        <h1 class="h3 mb-1">Edit Portfolio</h1>
+        <p class="text-muted mb-3">Update portfolio name and future default buffers.</p>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        {% if request.args.get('error') == 'has_snapshots' %}
+        <div class="alert alert-warning">Portfolio cannot be deleted while snapshots exist.</div>
+        {% endif %}
+        <form method="post" class="card p-4 mb-3">
+            <div class="mb-3">
+                <label class="form-label">Portfolio Name</label>
+                <input type="text" name="name" class="form-control" value="{{ form_data.get('name', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Buffer 1 (%)</label>
+                <input type="number" step="0.01" name="buffer_1_percent" class="form-control" value="{{ form_data.get('buffer_1_percent', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Buffer 2 (%)</label>
+                <input type="number" step="0.01" name="buffer_2_percent" class="form-control" value="{{ form_data.get('buffer_2_percent', '') }}" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save Portfolio</button>
+                <a href="{{ url_for('portfolios') }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+
+        <div class="card p-4 border-danger">
+            <h2 class="h5 text-danger">Danger Zone</h2>
+            <p class="mb-2">Hard delete is allowed only when no snapshots exist for this portfolio.</p>
+            <p class="mb-3"><strong>Snapshot count:</strong> {{ snapshot_count }}</p>
+            <form method="post" action="{{ url_for('remove_portfolio', portfolio_id=portfolio['id']) }}" onsubmit="return confirm('Delete this portfolio? This cannot be undone.');">
+                <button type="submit" class="btn btn-outline-danger" {% if snapshot_count > 0 %}disabled{% endif %}>Delete Portfolio</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

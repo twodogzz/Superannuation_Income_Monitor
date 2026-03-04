@@ -14,59 +14,53 @@
 
 <div class="card p-3">
     {% if snapshots %}
-    <div class="table-responsive">
-        <table class="table table-striped align-middle">
-            <thead>
-            <tr>
-                <th>Date</th>
-                <th>Total Value</th>
-                <th>Weighted Return</th>
-                <th>Annual Earnings</th>
-                <th>MSFI</th>
-                <th>Buffer 1</th>
-                <th>Buffer 2</th>
-                <th>Actual Income</th>
-                <th>Risk</th>
-                <th>Notes</th>
-                <th>Actions</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for row in snapshots %}
-            <tr>
-                <td>{{ row["snapshot_date"] }}</td>
-                <td>${{ "{:,.2f}".format(row["total_value"]) }}</td>
-                <td>{{ "{:.2f}%".format(row["weighted_return"] * 100) }}</td>
-                <td>${{ "{:,.2f}".format(row["annual_earnings"]) }}</td>
-                <td>${{ "{:,.2f}".format(row["msfi"]) }}</td>
-                <td>{{ "{:.2f}%".format(row["buffer_1_percent"] * 100) }} | ${{ "{:,.2f}".format(row["buffer_1_value"]) }}</td>
-                <td>{{ "{:.2f}%".format(row["buffer_2_percent"] * 100) }} | ${{ "{:,.2f}".format(row["buffer_2_value"]) }}</td>
-                <td>${{ "{:,.2f}".format(row["actual_income"]) }}</td>
-                <td>
-                    <span class="risk-{{ row['risk_status'] }}">{{ row["risk_status"] }}</span>
-                    <span> - {{ risk_explanation(row["risk_status"], row["buffer_1_percent"], row["buffer_2_percent"]) }}</span>
-                </td>
-                <td>{{ row["notes"] or "" }}</td>
-                <td>
-                    <div class="d-flex gap-2">
-                        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_snapshot', snapshot_id=row['id']) }}">Edit</a>
-                        <form method="post" action="{{ url_for('remove_snapshot', snapshot_id=row['id']) }}" onsubmit="return confirm('Delete this snapshot?');">
-                            <input type="hidden" name="next" value="{{ url_for('history', portfolio_id=row['portfolio_id']) }}">
-                            <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+    {% for row in snapshots %}
+    <div class="border rounded p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <strong>{{ row["snapshot_date"] }}</strong>
+                <span class="text-muted ms-2">Total ${{ "{:,.2f}".format(row["total_value"]) }}</span>
+            </div>
+            <div class="d-flex gap-2">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_snapshot', snapshot_id=row['id']) }}">Edit</a>
+                <form method="post" action="{{ url_for('remove_snapshot', snapshot_id=row['id']) }}" onsubmit="return confirm('Delete this snapshot?');">
+                    <input type="hidden" name="next" value="{{ url_for('history', portfolio_id=row['portfolio_id']) }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+                </form>
+            </div>
+        </div>
+        <div class="row g-2 mb-2">
+            <div class="col-md-2">MSFI: <strong>${{ "{:,.2f}".format(row["msfi"]) }}</strong></div>
+            <div class="col-md-2">Actual: <strong>${{ "{:,.2f}".format(row["actual_income"]) }}</strong></div>
+            <div class="col-md-2">Return: <strong>{{ "{:.2f}%".format(row["weighted_return"] * 100) }}</strong></div>
+            <div class="col-md-3">Buffer1: <strong>{{ "{:.2f}%".format(row["buffer_1_percent"] * 100) }} | ${{ "{:,.2f}".format(row["buffer_1_value"]) }}</strong></div>
+            <div class="col-md-3">Risk: <strong class="risk-{{ row['risk_status'] }}">{{ row["risk_status"] }}</strong> - {{ risk_explanation(row["risk_status"], row["buffer_1_percent"]) }}</div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead>
+                <tr>
+                    <th>Strategy</th>
+                    <th>Value</th>
+                    <th>Return Used</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for detail in snapshot_details[row["id"]] %}
+                <tr>
+                    <td>{{ detail["strategy_name"] }}</td>
+                    <td>${{ "{:,.2f}".format(detail["strategy_value"]) }}</td>
+                    <td>{{ "{:.2f}%".format(detail["return_used"] * 100) }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+    {% endfor %}
     {% else %}
-    {% if portfolio %}
     <p class="mb-0">No history yet for this portfolio.</p>
-    {% else %}
-    <p class="mb-0">No portfolios found. Create one from the Portfolios page.</p>
-    {% endif %}
     {% endif %}
 </div>
 {% endblock %}

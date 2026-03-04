@@ -1,4 +1,4 @@
-"""Data access layer for portfolios and snapshots."""
+"""Data access layer for portfolios, strategies, and snapshots."""
 
 from __future__ import annotations
 
@@ -6,32 +6,16 @@ from database import get_db
 
 
 def get_all_portfolios():
-    """Fetch all portfolios by name."""
     db = get_db()
-    return db.execute(
-        """
-        SELECT *
-        FROM portfolios
-        ORDER BY name ASC
-        """
-    ).fetchall()
+    return db.execute("SELECT * FROM portfolios ORDER BY name ASC").fetchall()
 
 
 def get_portfolio_by_id(portfolio_id: int):
-    """Fetch one portfolio by id."""
     db = get_db()
-    return db.execute(
-        """
-        SELECT *
-        FROM portfolios
-        WHERE id = ?
-        """,
-        (portfolio_id,),
-    ).fetchone()
+    return db.execute("SELECT * FROM portfolios WHERE id = ?", (portfolio_id,)).fetchone()
 
 
 def create_portfolio(name: str, buffer_1_percent: float, buffer_2_percent: float) -> int:
-    """Create a new portfolio with default future buffer settings."""
     db = get_db()
     cursor = db.execute(
         """
@@ -44,22 +28,122 @@ def create_portfolio(name: str, buffer_1_percent: float, buffer_2_percent: float
     return int(cursor.lastrowid)
 
 
-def update_portfolio_buffers(portfolio_id: int, buffer_1_percent: float, buffer_2_percent: float) -> None:
-    """Update only future default buffers on a portfolio."""
+def update_portfolio(portfolio_id: int, name: str, buffer_1_percent: float, buffer_2_percent: float) -> None:
     db = get_db()
     db.execute(
         """
         UPDATE portfolios
-        SET buffer_1_percent = ?, buffer_2_percent = ?
+        SET name = ?, buffer_1_percent = ?, buffer_2_percent = ?
         WHERE id = ?
         """,
-        (buffer_1_percent, buffer_2_percent, portfolio_id),
+        (name, buffer_1_percent, buffer_2_percent, portfolio_id),
     )
     db.commit()
 
 
+def portfolio_snapshot_count(portfolio_id: int) -> int:
+    db = get_db()
+    row = db.execute(
+        "SELECT COUNT(*) AS cnt FROM snapshots WHERE portfolio_id = ?",
+        (portfolio_id,),
+    ).fetchone()
+    return int(row["cnt"])
+
+
+def delete_portfolio_if_empty(portfolio_id: int) -> bool:
+    if portfolio_snapshot_count(portfolio_id) > 0:
+        return False
+    db = get_db()
+    db.execute("DELETE FROM portfolios WHERE id = ?", (portfolio_id,))
+    db.commit()
+    return True
+
+
+def get_strategies_by_portfolio(portfolio_id: int, include_inactive: bool = False):
+    db = get_db()
+    if include_inactive:
+        return db.execute(
+            """
+            SELECT *
+            FROM strategies
+            WHERE portfolio_id = ?
+            ORDER BY id ASC
+            """,
+            (portfolio_id,),
+        ).fetchall()
+    return db.execute(
+        """
+        SELECT *
+        FROM strategies
+        WHERE portfolio_id = ? AND active_flag = 1
+        ORDER BY id ASC
+        """,
+        (portfolio_id,),
+    ).fetchall()
+
+
+def get_strategy_by_id(strategy_id: int):
+    db = get_db()
+    return db.execute(
+        """
+        SELECT s.*, p.name AS portfolio_name
+        FROM strategies s
+        INNER JOIN portfolios p ON p.id = s.portfolio_id
+        WHERE s.id = ?
+        """,
+        (strategy_id,),
+    ).fetchone()
+
+
+def create_strategy(portfolio_id: int, name: str, default_return_5yr: float, active_flag: int) -> int:
+    db = get_db()
+    cursor = db.execute(
+        """
+        INSERT INTO strategies (portfolio_id, name, default_return_5yr, active_flag)
+        VALUES (?, ?, ?, ?)
+        """,
+        (portfolio_id, name, default_return_5yr, active_flag),
+    )
+    db.commit()
+    return int(cursor.lastrowid)
+
+
+def update_strategy(strategy_id: int, name: str, default_return_5yr: float, active_flag: int) -> None:
+    db = get_db()
+    db.execute(
+        """
+        UPDATE strategies
+        SET name = ?, default_return_5yr = ?, active_flag = ?
+        WHERE id = ?
+        """,
+        (name, default_return_5yr, active_flag, strategy_id),
+    )
+    db.commit()
+
+
+def strategy_usage_count(strategy_id: int) -> int:
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM snapshot_strategy_values
+        WHERE strategy_id = ?
+        """,
+        (strategy_id,),
+    ).fetchone()
+    return int(row["cnt"])
+
+
+def delete_strategy_if_unused(strategy_id: int) -> bool:
+    if strategy_usage_count(strategy_id) > 0:
+        return False
+    db = get_db()
+    db.execute("DELETE FROM strategies WHERE id = ?", (strategy_id,))
+    db.commit()
+    return True
+
+
 def get_latest_snapshot_by_portfolio(portfolio_id: int):
-    """Fetch latest snapshot for one portfolio."""
     db = get_db()
     return db.execute(
         """
@@ -74,7 +158,6 @@ def get_latest_snapshot_by_portfolio(portfolio_id: int):
 
 
 def get_chart_snapshots_by_portfolio(portfolio_id: int):
-    """Fetch chart series for one portfolio in chronological order."""
     db = get_db()
     return db.execute(
         """
@@ -88,7 +171,6 @@ def get_chart_snapshots_by_portfolio(portfolio_id: int):
 
 
 def get_snapshots_by_portfolio(portfolio_id: int):
-    """Fetch all snapshots for one portfolio newest first."""
     db = get_db()
     return db.execute(
         """
@@ -103,7 +185,6 @@ def get_snapshots_by_portfolio(portfolio_id: int):
 
 
 def get_snapshot_by_id(snapshot_id: int):
-    """Fetch one snapshot by id."""
     db = get_db()
     return db.execute(
         """
@@ -116,96 +197,114 @@ def get_snapshot_by_id(snapshot_id: int):
     ).fetchone()
 
 
-def insert_snapshot(snapshot: dict) -> int:
-    """Insert one snapshot record with snapshot-specific buffer values."""
+def get_snapshot_strategy_rows(snapshot_id: int):
     db = get_db()
-    cursor = db.execute(
+    return db.execute(
         """
-        INSERT INTO snapshots (
-            portfolio_id,
-            snapshot_date,
-            total_value,
-            weighted_return,
-            annual_earnings,
-            msfi,
-            buffer_1_percent,
-            buffer_2_percent,
-            buffer_1_value,
-            buffer_2_value,
-            actual_income,
-            risk_status,
-            notes
+        SELECT ssv.*, st.name AS strategy_name, st.active_flag
+        FROM snapshot_strategy_values ssv
+        INNER JOIN strategies st ON st.id = ssv.strategy_id
+        WHERE ssv.snapshot_id = ?
+        ORDER BY st.id ASC
+        """,
+        (snapshot_id,),
+    ).fetchall()
+
+
+def insert_snapshot_with_strategies(snapshot_payload: dict, strategy_rows: list[dict]) -> int:
+    db = get_db()
+    db.execute("BEGIN")
+    try:
+        cursor = db.execute(
+            """
+            INSERT INTO snapshots (
+                portfolio_id, snapshot_date, total_value, weighted_return, annual_earnings, msfi,
+                buffer_1_percent, buffer_2_percent, buffer_1_value, buffer_2_value,
+                actual_income, risk_status, notes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                snapshot_payload["portfolio_id"],
+                snapshot_payload["snapshot_date"],
+                snapshot_payload["total_value"],
+                snapshot_payload["weighted_return"],
+                snapshot_payload["annual_earnings"],
+                snapshot_payload["msfi"],
+                snapshot_payload["buffer_1_percent"],
+                snapshot_payload["buffer_2_percent"],
+                snapshot_payload["buffer_1_value"],
+                snapshot_payload["buffer_2_value"],
+                snapshot_payload["actual_income"],
+                snapshot_payload["risk_status"],
+                snapshot_payload.get("notes", ""),
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            snapshot["portfolio_id"],
-            snapshot["snapshot_date"],
-            snapshot["total_value"],
-            snapshot["weighted_return"],
-            snapshot["annual_earnings"],
-            snapshot["msfi"],
-            snapshot["buffer_1_percent"],
-            snapshot["buffer_2_percent"],
-            snapshot["buffer_1_value"],
-            snapshot["buffer_2_value"],
-            snapshot["actual_income"],
-            snapshot["risk_status"],
-            snapshot.get("notes", ""),
-        ),
-    )
-    db.commit()
-    return int(cursor.lastrowid)
+        snapshot_id = int(cursor.lastrowid)
+
+        for row in strategy_rows:
+            db.execute(
+                """
+                INSERT INTO snapshot_strategy_values (snapshot_id, strategy_id, strategy_value, return_used)
+                VALUES (?, ?, ?, ?)
+                """,
+                (snapshot_id, row["strategy_id"], row["strategy_value"], row["return_used"]),
+            )
+
+        db.commit()
+        return snapshot_id
+    except Exception:
+        db.rollback()
+        raise
 
 
-def update_snapshot(snapshot_id: int, snapshot: dict) -> None:
-    """Update one snapshot with recalculated dependent values."""
+def update_snapshot_with_strategies(snapshot_id: int, snapshot_payload: dict, strategy_rows: list[dict]) -> None:
     db = get_db()
-    db.execute(
-        """
-        UPDATE snapshots
-        SET
-            snapshot_date = ?,
-            total_value = ?,
-            weighted_return = ?,
-            annual_earnings = ?,
-            msfi = ?,
-            buffer_1_percent = ?,
-            buffer_2_percent = ?,
-            buffer_1_value = ?,
-            buffer_2_value = ?,
-            actual_income = ?,
-            risk_status = ?,
-            notes = ?
-        WHERE id = ?
-        """,
-        (
-            snapshot["snapshot_date"],
-            snapshot["total_value"],
-            snapshot["weighted_return"],
-            snapshot["annual_earnings"],
-            snapshot["msfi"],
-            snapshot["buffer_1_percent"],
-            snapshot["buffer_2_percent"],
-            snapshot["buffer_1_value"],
-            snapshot["buffer_2_value"],
-            snapshot["actual_income"],
-            snapshot["risk_status"],
-            snapshot.get("notes", ""),
-            snapshot_id,
-        ),
-    )
-    db.commit()
+    db.execute("BEGIN")
+    try:
+        db.execute(
+            """
+            UPDATE snapshots
+            SET
+                snapshot_date = ?, total_value = ?, weighted_return = ?, annual_earnings = ?, msfi = ?,
+                buffer_1_percent = ?, buffer_2_percent = ?, buffer_1_value = ?, buffer_2_value = ?,
+                actual_income = ?, risk_status = ?, notes = ?
+            WHERE id = ?
+            """,
+            (
+                snapshot_payload["snapshot_date"],
+                snapshot_payload["total_value"],
+                snapshot_payload["weighted_return"],
+                snapshot_payload["annual_earnings"],
+                snapshot_payload["msfi"],
+                snapshot_payload["buffer_1_percent"],
+                snapshot_payload["buffer_2_percent"],
+                snapshot_payload["buffer_1_value"],
+                snapshot_payload["buffer_2_value"],
+                snapshot_payload["actual_income"],
+                snapshot_payload["risk_status"],
+                snapshot_payload.get("notes", ""),
+                snapshot_id,
+            ),
+        )
+        db.execute("DELETE FROM snapshot_strategy_values WHERE snapshot_id = ?", (snapshot_id,))
+
+        for row in strategy_rows:
+            db.execute(
+                """
+                INSERT INTO snapshot_strategy_values (snapshot_id, strategy_id, strategy_value, return_used)
+                VALUES (?, ?, ?, ?)
+                """,
+                (snapshot_id, row["strategy_id"], row["strategy_value"], row["return_used"]),
+            )
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def delete_snapshot(snapshot_id: int) -> None:
-    """Delete one snapshot by id."""
     db = get_db()
-    db.execute(
-        """
-        DELETE FROM snapshots
-        WHERE id = ?
-        """,
-        (snapshot_id,),
-    )
+    db.execute("DELETE FROM snapshots WHERE id = ?", (snapshot_id,))
     db.commit()

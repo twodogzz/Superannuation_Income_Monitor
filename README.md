@@ -16,40 +16,42 @@ This project was created using the New Project Wizard and follows the standard e
 
 ---
 
-## Multi-Portfolio Upgrade
+## Portfolio + Strategy Model
 
-The app now supports multiple portfolios, each with independent buffer settings and snapshot history.
+The app supports multiple portfolios, each with its own strategy set and snapshot history.
 
-- Create portfolios from the `Portfolios` page.
-- Select a portfolio from the navbar dropdown to focus the dashboard and actions.
-- Add snapshots per portfolio using that portfolio's active buffer percentages.
-- Edit a portfolio's buffers to change **future** calculations only.
+- Strategies are portfolio-specific and include:
+  - `name`
+  - `default_return_5yr`
+  - `active_flag`
+- New snapshot forms show active strategies only.
+- Snapshot records store strategy values and `return_used` per strategy for that month.
+- Weighted return is derived from snapshot strategy rows, not entered manually.
 
-### How Buffer Modification Works
+### Historical Integrity Rules
 
-- Portfolio-level `Buffer 1` and `Buffer 2` percentages are defaults for future snapshots.
-- When you add a snapshot, the current portfolio buffer percentages are copied into that snapshot.
-- Snapshot records store:
-  - `buffer_1_percent`
-  - `buffer_2_percent`
-  - `buffer_1_value`
-  - `buffer_2_value`
-- Risk status is calculated from the values stored on that snapshot.
+- Editing portfolio buffer defaults affects only future snapshots.
+- Editing a historical snapshot recalculates only that snapshot.
+- Historical strategy values and return rates remain stable unless that snapshot is explicitly edited.
 
-### Historical Integrity
+### Deletion Policies
 
-- Historical records remain stable after portfolio buffer changes.
-- Editing a snapshot recalculates only that snapshot.
-- Other snapshots (past/future) are not modified.
+- Strategy delete is blocked if referenced in any snapshot.
+- Referenced strategies can be marked inactive instead.
+- Portfolio hard delete is allowed only when it has no snapshots.
 
-### Migration Logic
+### Migration Behavior
 
-On startup, the app auto-migrates legacy single-portfolio data:
+On startup, schema migration is applied safely and idempotently:
 
-- Creates `portfolios` table.
-- Creates new `snapshots` table with `portfolio_id` foreign key.
-- Creates `Default Portfolio` if needed.
-- Migrates legacy snapshot rows into the new schema while preserving financial values.
+- Adds `strategies` and `snapshot_strategy_values` tables.
+- Preserves existing snapshots.
+- Seeds default strategies per portfolio:
+  - Growth (7%)
+  - Balanced (5%)
+  - Conservative (3%)
+  - Cash (2%)
+- Backfills strategy rows for old snapshots using an equal-value split fallback.
 
 ## Run The MSFI Flask App
 
@@ -85,4 +87,15 @@ flask run
 ```
 
 Then open the local URL shown in the terminal (typically `http://127.0.0.1:5000`).
+
+---
+
+## Run Unit Tests
+
+From the project root:
+
+```bash
+python -m unittest tests.test_calculations -v
+python -m unittest tests.test_snapshot_logic -v
+```
 

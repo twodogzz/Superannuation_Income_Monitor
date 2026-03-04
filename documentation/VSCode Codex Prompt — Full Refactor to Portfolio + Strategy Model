@@ -1,0 +1,253 @@
+You are a senior Python software architect.
+
+We are refactoring an existing Flask + SQLite MSFI monitoring system.
+
+Current system supports:
+- Multiple portfolios
+- Snapshot history
+- Configurable buffers
+- Risk logic
+- No ORM (raw parameterized SQL only)
+- Modular architecture
+- Application factory pattern
+
+The previous refactor accidentally removed:
+
+- Monthly entry of investment strategy values:
+    - Growth
+    - Balanced
+    - Conservative
+    - Cash
+- Entry of 5-year return rates per strategy
+- Weighted return calculation derived from strategies
+
+We must now restore and properly redesign strategy handling.
+
+This is a structural refactor, not a patch.
+
+--------------------------------------------------
+ARCHITECTURAL DECISIONS (MANDATORY)
+--------------------------------------------------
+
+1. Strategies are PORTFOLIO-SPECIFIC.
+2. Each strategy has:
+       - name
+       - default_5yr_return
+       - active_flag
+3. Snapshot must store:
+       - strategy value for that month
+       - return rate used that month
+4. Modifying a historical snapshot’s return rate:
+       - Affects that snapshot only.
+       - Future snapshots use strategy default unless overridden.
+5. Strategies cannot be deleted if referenced in any snapshot.
+       - Instead, allow inactive_flag = true.
+6. Portfolio hard delete allowed ONLY if:
+       - All snapshots are hard deleted first.
+
+--------------------------------------------------
+DATABASE REDESIGN
+--------------------------------------------------
+
+Replace schema with:
+
+Table: portfolios
+- id (PK)
+- name (unique, not null)
+- buffer_1_percent
+- buffer_2_percent
+- created_at
+
+Table: strategies
+- id (PK)
+- portfolio_id (FK → portfolios.id ON DELETE RESTRICT)
+- name
+- default_return_5yr
+- active_flag (boolean)
+- created_at
+
+Table: snapshots
+- id (PK)
+- portfolio_id (FK → portfolios.id ON DELETE RESTRICT)
+- snapshot_date
+- total_value
+- weighted_return
+- annual_earnings
+- msfi
+- buffer_1_percent
+- buffer_2_percent
+- buffer_1_value
+- buffer_2_value
+- actual_income
+- risk_status
+- notes
+- created_at
+
+Table: snapshot_strategy_values
+- id (PK)
+- snapshot_id (FK → snapshots.id ON DELETE CASCADE)
+- strategy_id (FK → strategies.id ON DELETE RESTRICT)
+- strategy_value
+- return_used
+
+Use foreign key constraints.
+Enable PRAGMA foreign_keys = ON.
+
+No ORM.
+Parameterized SQL only.
+
+--------------------------------------------------
+CALCULATION RULES
+--------------------------------------------------
+
+For snapshot creation:
+
+1. Fetch all ACTIVE strategies for the portfolio.
+2. User enters:
+       - strategy_value
+       - optional override return rate
+3. If override blank:
+       use strategy.default_return_5yr
+4. Store return_used inside snapshot_strategy_values.
+
+Weighted Return =
+    sum(strategy_weight × return_used)
+
+Where:
+    strategy_weight = strategy_value / total_value
+
+Annual Earnings = total_value × weighted_return
+
+MSFI = annual_earnings / 26
+
+Buffers:
+    buffer_1_value = MSFI × (1 - buffer_1_percent)
+    buffer_2_value = MSFI × (1 - buffer_2_percent)
+
+Risk Logic:
+    if actual_income > MSFI → "Overdrawing"
+    elif actual_income > buffer_1_value → "Caution"
+    else → "Safe"
+
+--------------------------------------------------
+HISTORICAL EDITING RULES
+--------------------------------------------------
+
+Editing a snapshot must allow:
+- Changing strategy_value
+- Changing return_used
+- Changing actual_income
+- Changing buffer percentages
+
+When edited:
+- Recalculate weighted_return
+- Recalculate annual_earnings
+- Recalculate MSFI
+- Recalculate buffers
+- Recalculate risk
+
+Other snapshots must NOT be modified.
+
+--------------------------------------------------
+STRATEGY MANAGEMENT UI
+--------------------------------------------------
+
+Add strategy management page per portfolio:
+
+User can:
+- Add strategy
+- Edit strategy name
+- Edit default return
+- Set active/inactive
+
+Deletion rules:
+- If strategy referenced in snapshot_strategy_values:
+      block deletion
+- If not referenced:
+      allow hard delete
+
+Inactive strategies:
+- Not shown in new snapshot form
+- Still shown in historical views
+
+--------------------------------------------------
+PORTFOLIO MANAGEMENT ENHANCEMENT
+--------------------------------------------------
+
+Allow full portfolio edit:
+- name
+- buffer_1_percent
+- buffer_2_percent
+
+Changing buffers:
+- Affects future snapshots only.
+
+Hard delete:
+- Only allowed if no snapshots exist.
+- Enforce with database constraint + application check.
+
+--------------------------------------------------
+UI REQUIREMENTS
+--------------------------------------------------
+
+For snapshot entry:
+
+Display dynamic strategy input fields:
+- Strategy Name
+- Value
+- Return rate (pre-filled with default, editable)
+
+For snapshot edit:
+- Display stored values
+- Allow modification
+
+Dashboard:
+- Display strategy breakdown table for latest snapshot
+- Chart MSFI vs Actual Income vs Total Value
+
+--------------------------------------------------
+MIGRATION REQUIREMENT
+--------------------------------------------------
+
+Provide migration logic:
+
+If old schema detected:
+- Create new tables
+- Migrate existing snapshot data into new structure
+- Create default strategies:
+      Growth
+      Balanced
+      Conservative
+      Cash
+      with placeholder default returns
+
+Do NOT lose data.
+
+--------------------------------------------------
+ENGINEERING RULES
+--------------------------------------------------
+
+- Keep modular structure.
+- Keep calculations in calculations.py.
+- Keep database logic in database.py.
+- Use transactions for snapshot creation.
+- Round money to 2 decimals.
+- Round returns to 4 decimals.
+- No over-engineering.
+- No unnecessary abstractions.
+- No ORM.
+- No external APIs.
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+1. Provide updated project structure.
+2. Provide full updated Python modules.
+3. Provide updated templates.
+4. Provide migration logic.
+5. Provide README explaining:
+       - Portfolio + Strategy model
+       - Historical integrity rules
+       - Deletion policies
+       - Editing behavior

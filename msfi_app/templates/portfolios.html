@@ -31,8 +31,7 @@
                     <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Buffer 1</th>
-                        <th>Buffer 2</th>
+                        <th>Buffers</th>
                         <th>Actions</th>
                     </tr>
                     </thead>
@@ -40,10 +39,10 @@
                     {% for portfolio in portfolios %}
                     <tr>
                         <td>{{ portfolio["name"] }}</td>
-                        <td>{{ "{:.2f}%".format(portfolio["buffer_1_percent"] * 100) }}</td>
-                        <td>{{ "{:.2f}%".format(portfolio["buffer_2_percent"] * 100) }}</td>
+                        <td>{{ "{:.2f}%".format(portfolio["buffer_1_percent"] * 100) }} / {{ "{:.2f}%".format(portfolio["buffer_2_percent"] * 100) }}</td>
                         <td class="d-flex gap-2">
-                            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_portfolio_buffers', portfolio_id=portfolio['id']) }}">Edit Buffers</a>
+                            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_portfolio', portfolio_id=portfolio['id']) }}">Edit</a>
+                            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('strategies', portfolio_id=portfolio['id']) }}">Strategies</a>
                             <a class="btn btn-outline-primary btn-sm" href="{{ url_for('history', portfolio_id=portfolio['id']) }}">History</a>
                         </td>
                     </tr>
