@@ -1,0 +1,6 @@
+'''After Codex generates v1, follow with:'''
+
+Refactor for clarity and improve separation of concerns.
+Reduce duplication.
+Ensure calculations are independently testable.
+Add one simple unit test file for calculation functions.
