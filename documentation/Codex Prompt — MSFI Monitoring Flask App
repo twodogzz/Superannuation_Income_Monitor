@@ -1,0 +1,147 @@
+You are a senior Python software architect.
+
+Build a production-quality local web application using:
+
+- Python 3.14.3
+- Flask
+- SQLite
+- Jinja2 templates
+- Bootstrap 5 (CDN)
+- Chart.js (CDN)
+
+The purpose of the app is to monitor and record the Maximum Sustainable Fortnightly Income (MSFI) from a superannuation portfolio.
+
+The system must be:
+
+- Simple
+- Cleanly structured
+- Maintainable
+- Modular
+- Fully commented
+- Suitable for a single-user local installation
+- No authentication required
+- No external APIs
+
+--------------------------------------------------
+PROJECT REQUIREMENTS
+--------------------------------------------------
+
+The app must:
+
+1. Allow monthly entry of:
+   - Snapshot date
+   - Total portfolio value
+   - Value of:
+        - Growth
+        - Balanced
+        - Conservative
+        - Cash
+   - 5-year return rates for each option
+   - Actual fortnightly income being withdrawn
+   - Optional notes
+
+2. Automatically calculate:
+   - Portfolio weightings
+   - Weighted expected annual return
+   - Expected annual earnings
+   - Maximum sustainable annual income
+   - Maximum sustainable fortnightly income
+   - 10% safety buffer MSFI
+   - 20% safety buffer MSFI
+   - Income risk flag if actual withdrawal exceeds MSFI
+
+3. Store all monthly snapshots in SQLite.
+
+4. Provide:
+   - Dashboard view (latest snapshot summary)
+   - Historical table view
+   - Chart showing:
+        - Portfolio value over time
+        - Sustainable fortnightly income over time
+        - Actual fortnightly income over time
+
+--------------------------------------------------
+ARCHITECTURE REQUIREMENTS
+--------------------------------------------------
+
+Use this project structure:
+
+msfi_app/
+│
+├── app.py
+├── calculations.py
+├── models.py
+├── database.py
+├── config.py
+├── requirements.txt
+│
+├── templates/
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── add_snapshot.html
+│   └── history.html
+│
+└── static/
+
+--------------------------------------------------
+ENGINEERING RULES
+--------------------------------------------------
+
+- Use application factory pattern.
+- Separate calculation logic into calculations.py.
+- All financial math must be pure functions.
+- Round monetary outputs to 2 decimal places.
+- Use SQLite file database named msfi.db.
+- Use parameterized SQL queries (no ORM).
+- Use Bootstrap for layout.
+- Use Chart.js for charts.
+- Include inline comments explaining calculations.
+- Include a README section at the bottom explaining how to run.
+
+--------------------------------------------------
+CALCULATION SPECIFICATION
+--------------------------------------------------
+
+Weighted Return = sum(weight_i × return_i)
+
+Where:
+
+weight_i = option_value / total_value
+
+Annual Earnings = total_value × weighted_return
+
+Maximum Sustainable Annual Income = Annual Earnings
+
+Maximum Sustainable Fortnightly Income = Annual Earnings / 26
+
+10% Buffer MSFI = MSFI × 0.90
+
+20% Buffer MSFI = MSFI × 0.80
+
+Risk Flag:
+    If actual_fortnightly_income > MSFI → "Overdrawing"
+    Else if actual_fortnightly_income > 10% buffer → "Caution"
+    Else → "Safe"
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+Generate:
+
+1. All project files in full.
+2. Clean, runnable code.
+3. No placeholders.
+4. No pseudocode.
+5. Minimal but professional UI styling.
+6. Instructions to run locally using:
+       python -m venv venv
+       pip install -r requirements.txt
+       flask run
+
+--------------------------------------------------
+
+Focus on clarity, maintainability, and correctness.
+Do not over-engineer.
+Do not use unnecessary frameworks.
+Keep it elegant and simple.
