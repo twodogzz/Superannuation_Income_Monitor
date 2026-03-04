@@ -72,11 +72,14 @@ def calculate_risk_status(msfi: float, actual_income: float, buffer_1_value: flo
     Determine risk state from stored snapshot thresholds.
 
     - actual > msfi: Overdrawing
-    - actual > buffer_1_value: Caution
+    - actual > buffer_1_value: Alert
+    - actual > buffer_2_value: Caution
     - else: Safe
     """
     if actual_income > msfi:
         return "Overdrawing"
     if actual_income > buffer_1_value:
+        return "Alert"
+    if actual_income > buffer_2_value:
         return "Caution"
     return "Safe"

@@ -46,6 +46,112 @@ class SnapshotWorkflowTests(unittest.TestCase):
             row = conn.execute("SELECT id FROM portfolios WHERE name = ?", (name,)).fetchone()
             return int(row["id"])
 
+    def _create_strategy(self, portfolio_id: int, name: str, default_return_percent: str) -> int:
+        self.client.post(
+            f"/portfolios/{portfolio_id}/strategies",
+            data={"name": name, "default_return_5yr_percent": default_return_percent, "active_flag": "1"},
+            follow_redirects=True,
+        )
+        with closing(self._db()) as conn:
+            row = conn.execute(
+                "SELECT id FROM strategies WHERE portfolio_id = ? AND name = ?",
+                (portfolio_id, name),
+            ).fetchone()
+            return int(row["id"])
+
+    def _add_snapshot(
+        self,
+        portfolio_id: int,
+        snapshot_date: str,
+        total_value: str,
+        actual_income: str,
+        strategy_values: dict[int, str],
+        strategy_returns: dict[int, str],
+    ) -> int:
+        payload = {
+            "portfolio_id": str(portfolio_id),
+            "snapshot_date": snapshot_date,
+            "total_value": total_value,
+            "actual_income": actual_income,
+            "notes": "",
+        }
+        for strategy_id, value in strategy_values.items():
+            payload[f"strategy_value_{strategy_id}"] = value
+            payload[f"return_percent_{strategy_id}"] = strategy_returns[strategy_id]
+
+        resp = self.client.post("/add", data=payload, follow_redirects=True)
+        self.assertEqual(resp.status_code, 200)
+        with closing(self._db()) as conn:
+            row = conn.execute(
+                """
+                SELECT id
+                FROM snapshots
+                WHERE portfolio_id = ?
+                ORDER BY snapshot_date DESC, id DESC
+                LIMIT 1
+                """,
+                (portfolio_id,),
+            ).fetchone()
+            return int(row["id"])
+
+    def test_dashboard_updates_actual_income_for_latest_snapshot(self):
+        portfolio_id = self._create_portfolio("Dashboard Update")
+        strategy_id = self._create_strategy(portfolio_id, "Income Strategy", "10.0")
+        snapshot_id = self._add_snapshot(
+            portfolio_id=portfolio_id,
+            snapshot_date="2026-03-01",
+            total_value="260000",
+            actual_income="800",
+            strategy_values={strategy_id: "260000"},
+            strategy_returns={strategy_id: "10.0"},
+        )
+
+        resp = self.client.post(
+            f"/snapshots/{snapshot_id}/actual-income",
+            data={"actual_income": "950"},
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Actual fortnightly income updated for latest snapshot.", resp.get_data(as_text=True))
+
+        with closing(self._db()) as conn:
+            updated = conn.execute("SELECT actual_income, risk_status FROM snapshots WHERE id = ?", (snapshot_id,)).fetchone()
+            self.assertEqual(float(updated["actual_income"]), 950.0)
+            self.assertEqual(updated["risk_status"], "Alert")
+
+    def test_dashboard_rejects_actual_income_update_for_non_latest_snapshot(self):
+        portfolio_id = self._create_portfolio("Dashboard Update Guardrail")
+        strategy_id = self._create_strategy(portfolio_id, "Income Strategy", "10.0")
+        first_snapshot_id = self._add_snapshot(
+            portfolio_id=portfolio_id,
+            snapshot_date="2026-03-01",
+            total_value="260000",
+            actual_income="800",
+            strategy_values={strategy_id: "260000"},
+            strategy_returns={strategy_id: "10.0"},
+        )
+        self._add_snapshot(
+            portfolio_id=portfolio_id,
+            snapshot_date="2026-03-02",
+            total_value="260000",
+            actual_income="850",
+            strategy_values={strategy_id: "260000"},
+            strategy_returns={strategy_id: "10.0"},
+        )
+
+        resp = self.client.post(
+            f"/snapshots/{first_snapshot_id}/actual-income",
+            data={"actual_income": "1200"},
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Only the latest snapshot can be updated from the dashboard.", resp.get_data(as_text=True))
+
+        with closing(self._db()) as conn:
+            first = conn.execute("SELECT actual_income, risk_status FROM snapshots WHERE id = ?", (first_snapshot_id,)).fetchone()
+            self.assertEqual(float(first["actual_income"]), 800.0)
+            self.assertEqual(first["risk_status"], "Safe")
+
     def test_snapshot_strategy_lifecycle_and_delete_policies(self):
         portfolio_id = self._create_portfolio("Integration Portfolio")
 

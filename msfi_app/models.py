@@ -25,7 +25,7 @@ def create_portfolio(name: str, buffer_1_percent: float, buffer_2_percent: float
         (name, buffer_1_percent, buffer_2_percent),
     )
     db.commit()
-    return int(cursor.lastrowid)
+    return int(cursor.lastrowid or 0)
 
 
 def update_portfolio(portfolio_id: int, name: str, buffer_1_percent: float, buffer_2_percent: float) -> None:
@@ -105,7 +105,7 @@ def create_strategy(portfolio_id: int, name: str, default_return_5yr: float, act
         (portfolio_id, name, default_return_5yr, active_flag),
     )
     db.commit()
-    return int(cursor.lastrowid)
+    return int(cursor.lastrowid or 0)
 
 
 def update_strategy(strategy_id: int, name: str, default_return_5yr: float, active_flag: int) -> None:
@@ -240,7 +240,7 @@ def insert_snapshot_with_strategies(snapshot_payload: dict, strategy_rows: list[
                 snapshot_payload.get("notes", ""),
             ),
         )
-        snapshot_id = int(cursor.lastrowid)
+        snapshot_id = int(cursor.lastrowid or 0)
 
         for row in strategy_rows:
             db.execute(
@@ -302,6 +302,19 @@ def update_snapshot_with_strategies(snapshot_id: int, snapshot_payload: dict, st
     except Exception:
         db.rollback()
         raise
+
+
+def update_snapshot_actual_income(snapshot_id: int, actual_income: float, risk_status: str) -> None:
+    db = get_db()
+    db.execute(
+        """
+        UPDATE snapshots
+        SET actual_income = ?, risk_status = ?
+        WHERE id = ?
+        """,
+        (actual_income, risk_status, snapshot_id),
+    )
+    db.commit()
 
 
 def delete_snapshot(snapshot_id: int) -> None:

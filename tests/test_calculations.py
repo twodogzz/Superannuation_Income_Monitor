@@ -47,9 +47,17 @@ class CalculationTests(unittest.TestCase):
         risk = calculate_risk_status(msfi=2000.0, actual_income=1500.0, buffer_1_value=1800.0, buffer_2_value=1600.0)
         self.assertEqual(risk, "Safe")
 
-    def test_risk_status_caution(self):
+    def test_risk_status_alert(self):
         risk = calculate_risk_status(msfi=2000.0, actual_income=1850.0, buffer_1_value=1800.0, buffer_2_value=1600.0)
+        self.assertEqual(risk, "Alert")
+
+    def test_risk_status_caution(self):
+        risk = calculate_risk_status(msfi=2000.0, actual_income=1700.0, buffer_1_value=1800.0, buffer_2_value=1600.0)
         self.assertEqual(risk, "Caution")
+
+    def test_risk_status_equal_msfi_is_alert(self):
+        risk = calculate_risk_status(msfi=2000.0, actual_income=2000.0, buffer_1_value=1800.0, buffer_2_value=1600.0)
+        self.assertEqual(risk, "Alert")
 
     def test_risk_status_overdrawing(self):
         risk = calculate_risk_status(msfi=2000.0, actual_income=2100.0, buffer_1_value=1800.0, buffer_2_value=1600.0)

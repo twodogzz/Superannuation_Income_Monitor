@@ -35,6 +35,7 @@ from models import (
     portfolio_snapshot_count,
     strategy_usage_count,
     update_portfolio,
+    update_snapshot_actual_income,
     update_snapshot_with_strategies,
     update_strategy,
 )
@@ -51,13 +52,16 @@ def _safe_next_path(next_path: str | None) -> str:
     return url_for("dashboard")
 
 
-def _risk_explanation(risk_status: str, buffer_1_percent: float) -> str:
-    buffer_label = round(buffer_1_percent * 100, 2)
+def _risk_explanation(risk_status: str, buffer_1_percent: float, buffer_2_percent: float | None = None) -> str:
+    buffer_1_label = round(buffer_1_percent * 100, 2)
+    buffer_2_label = round((buffer_2_percent if buffer_2_percent is not None else buffer_1_percent) * 100, 2)
     if risk_status == "Overdrawing":
         return "Actual income is above MSFI"
+    if risk_status == "Alert":
+        return f"Actual income exceeds {buffer_1_label}% buffer"
     if risk_status == "Caution":
-        return f"Actual income is above {buffer_label}% buffer"
-    return f"Actual income is below {buffer_label}% buffer"
+        return f"Actual income exceeds {buffer_2_label}% buffer"
+    return f"Actual income is not above {buffer_2_label}% buffer"
 
 
 def _parse_percent_input(raw_value: str) -> float:
@@ -149,6 +153,16 @@ def _snapshot_form_from_snapshot(snapshot: Any) -> dict[str, str]:
         "notes": snapshot["notes"] or "",
         "buffer_1_percent": str(round(float(snapshot["buffer_1_percent"]) * 100, 4)),
         "buffer_2_percent": str(round(float(snapshot["buffer_2_percent"]) * 100, 4)),
+    }
+
+
+def _dashboard_feedback_params(status: str, message: str, portfolio_id: int) -> dict[str, Any]:
+    return {
+        "portfolio_id": portfolio_id,
+        "focus_portfolio_id": portfolio_id,
+        "income_update_portfolio_id": portfolio_id,
+        "income_update_status": status,
+        "income_update_message": message,
     }
 
 
@@ -250,8 +264,8 @@ def _build_snapshot_payload(form_data: Any, portfolio_id: int, strategy_rows: li
     }
 
 
-def create_app(test_config: dict | None = None) -> Flask:
-    app = Flask(__name__)
+def create_app(test_config: dict | None = None, template_folder: str | None = None) -> Flask:
+    app = Flask(__name__) if template_folder is None else Flask(__name__, template_folder=template_folder)
     app.config.from_object(Config)
     if test_config:
         app.config.update(test_config)
@@ -281,6 +295,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.route("/")
     def dashboard():
         portfolios = get_all_portfolios()
+        feedback_portfolio_id = request.args.get("income_update_portfolio_id", type=int)
+        feedback_status = request.args.get("income_update_status", "")
+        feedback_message = request.args.get("income_update_message", "")
         sections: list[dict] = []
         for portfolio in portfolios:
             portfolio_id = int(portfolio["id"])
@@ -307,6 +324,8 @@ def create_app(test_config: dict | None = None) -> Flask:
                     "latest": dict(latest) if latest is not None else None,
                     "latest_strategy_rows": latest_strategy_rows,
                     "chart_data": chart_data,
+                    "income_update_status": feedback_status if feedback_portfolio_id == portfolio_id else "",
+                    "income_update_message": feedback_message if feedback_portfolio_id == portfolio_id else "",
                 }
             )
 
@@ -523,6 +542,60 @@ def create_app(test_config: dict | None = None) -> Flask:
             abort(404)
         delete_snapshot(snapshot_id)
         return redirect(_safe_next_path(request.form.get("next")))
+
+    @app.route("/snapshots/<int:snapshot_id>/actual-income", methods=["POST"])
+    def update_latest_actual_income(snapshot_id: int):
+        snapshot = get_snapshot_by_id(snapshot_id)
+        if snapshot is None:
+            abort(404)
+
+        portfolio_id = int(snapshot["portfolio_id"])
+        latest = get_latest_snapshot_by_portfolio(portfolio_id)
+        if latest is None or int(latest["id"]) != snapshot_id:
+            return redirect(
+                url_for(
+                    "dashboard",
+                    **_dashboard_feedback_params(
+                        "error",
+                        "Only the latest snapshot can be updated from the dashboard.",
+                        portfolio_id,
+                    ),
+                )
+            )
+
+        try:
+            actual_income = round(float(request.form.get("actual_income", "").strip()), 2)
+            if actual_income < 0:
+                raise ValueError
+        except ValueError:
+            return redirect(
+                url_for(
+                    "dashboard",
+                    **_dashboard_feedback_params(
+                        "error",
+                        "Actual fortnightly income must be a non-negative number.",
+                        portfolio_id,
+                    ),
+                )
+            )
+
+        risk_status = calculate_risk_status(
+            float(snapshot["msfi"]),
+            actual_income,
+            float(snapshot["buffer_1_value"]),
+            float(snapshot["buffer_2_value"]),
+        )
+        update_snapshot_actual_income(snapshot_id, actual_income, risk_status)
+        return redirect(
+            url_for(
+                "dashboard",
+                **_dashboard_feedback_params(
+                    "success",
+                    "Actual fortnightly income updated for latest snapshot.",
+                    portfolio_id,
+                ),
+            )
+        )
 
     @app.route("/history")
     def history():

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-lg-6">
+        <h1 class="h3 mb-1">Edit Strategy</h1>
+        <p class="text-muted mb-3">
+            Portfolio: <strong>{{ strategy["portfolio_name"] }}</strong><br>
+            Referenced by {{ usage_count }} snapshot row(s).
+        </p>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="post" class="card p-4">
+            <div class="mb-3">
+                <label class="form-label">Strategy Name</label>
+                <input type="text" name="name" class="form-control" value="{{ form_data.get('name', '') }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Default 5-Year Return (%)</label>
+                <input type="number" step="0.01" name="default_return_5yr_percent" class="form-control" value="{{ form_data.get('default_return_5yr_percent', '') }}" required>
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="active_flag" name="active_flag" value="1" {% if form_data.get('active_flag', '1') == '1' %}checked{% endif %}>
+                <label class="form-check-label" for="active_flag">Active</label>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save Strategy</button>
+                <a href="{{ url_for('strategies', portfolio_id=strategy['portfolio_id']) }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
