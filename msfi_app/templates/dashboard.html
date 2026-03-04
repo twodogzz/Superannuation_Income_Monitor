@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 m-0">Dashboard</h1>
+        <div class="text-muted">Maximum Sustainable Fortnightly Income (MSFI)</div>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('add_snapshot', portfolio_id=nav_selected_portfolio_id) }}">Add Snapshot</a>
+</div>
+
+{% if sections %}
+    {% for section in sections %}
+    <section id="portfolio-{{ section.portfolio['id'] }}" class="mb-4">
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="h4 mb-0">{{ section.portfolio["name"] }}</h2>
+                    <div class="text-muted">
+                        Active Buffers for Future Snapshots:
+                        {{ (section.portfolio["buffer_1_percent"] * 100)|round(2) }}% and
+                        {{ (section.portfolio["buffer_2_percent"] * 100)|round(2) }}%
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_portfolio_buffers', portfolio_id=section.portfolio['id']) }}">Edit Buffers</a>
+                    <a class="btn btn-primary btn-sm" href="{{ url_for('add_snapshot', portfolio_id=section.portfolio['id']) }}">Add Snapshot</a>
+                </div>
+            </div>
+
+            {% if section.latest %}
+            <div class="row g-3 mb-3">
+                <div class="col-md-3"><div class="card p-3 h-100"><div class="text-muted">Snapshot Date</div><div class="h5 mb-0">{{ section.latest["snapshot_date"] }}</div></div></div>
+                <div class="col-md-3"><div class="card p-3 h-100"><div class="text-muted">Total Value</div><div class="h5 mb-0">${{ "{:,.2f}".format(section.latest["total_value"]) }}</div></div></div>
+                <div class="col-md-3"><div class="card p-3 h-100"><div class="text-muted">MSFI</div><div class="h5 mb-0">${{ "{:,.2f}".format(section.latest["msfi"]) }}</div></div></div>
+                <div class="col-md-3"><div class="card p-3 h-100"><div class="text-muted">Risk</div><div><span class="risk-{{ section.latest['risk_status'] }}">{{ section.latest["risk_status"] }}</span> - {{ risk_explanation(section.latest["risk_status"], section.latest["buffer_1_percent"], section.latest["buffer_2_percent"]) }}</div></div></div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mb-2">
+                <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('edit_snapshot', snapshot_id=section.latest['id']) }}">Edit Latest</a>
+                <form method="post" action="{{ url_for('remove_snapshot', snapshot_id=section.latest['id']) }}" onsubmit="return confirm('Delete this snapshot?');">
+                    <input type="hidden" name="next" value="{{ url_for('dashboard', portfolio_id=section.portfolio['id'], focus_portfolio_id=section.portfolio['id']) }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Delete Latest</button>
+                </form>
+                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('history', portfolio_id=section.portfolio['id']) }}">View History</a>
+            </div>
+
+            <h3 class="h6">Portfolio Trend</h3>
+            <canvas id="chart-{{ section.portfolio['id'] }}" height="90"></canvas>
+            {% else %}
+            <div class="alert alert-light border mb-0">
+                No snapshots yet for this portfolio.
+                <a href="{{ url_for('add_snapshot', portfolio_id=section.portfolio['id']) }}">Create first snapshot</a>.
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
+{% else %}
+<div class="card p-4">
+    <p class="mb-3">No portfolios yet.</p>
+    <a class="btn btn-primary" href="{{ url_for('portfolios') }}">Create Portfolio</a>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const sections = {{ sections | tojson }};
+for (const section of sections) {
+    const canvas = document.getElementById("chart-" + section.portfolio.id);
+    if (!canvas || section.chart_data.labels.length === 0) {
+        continue;
+    }
+
+    new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: section.chart_data.labels,
+            datasets: [
+                {
+                    label: "Portfolio Value ($)",
+                    data: section.chart_data.portfolio_values,
+                    borderColor: "#0d6efd",
+                    yAxisID: "y",
+                    tension: 0.2
+                },
+                {
+                    label: "MSFI ($/fortnight)",
+                    data: section.chart_data.msfi_values,
+                    borderColor: "#198754",
+                    yAxisID: "y1",
+                    tension: 0.2
+                },
+                {
+                    label: "Actual Income ($/fortnight)",
+                    data: section.chart_data.actual_income_values,
+                    borderColor: "#dc3545",
+                    yAxisID: "y1",
+                    tension: 0.2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: "index", intersect: false },
+            scales: {
+                y: { title: { display: true, text: "Portfolio Value ($)" } },
+                y1: { position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Fortnightly Income ($)" } }
+            }
+        }
+    });
+}
+
+const focusPortfolioId = {{ focus_portfolio_id | tojson }};
+if (focusPortfolioId) {
+    const section = document.getElementById("portfolio-" + focusPortfolioId);
+    if (section) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+</script>
+{% endblock %}
