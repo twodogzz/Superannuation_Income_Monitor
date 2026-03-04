@@ -1,0 +1,176 @@
+You are a senior Python software architect.
+
+We are upgrading an existing Flask + SQLite application that monitors Maximum Sustainable Fortnightly Income (MSFI).
+
+Current version:
+- Single portfolio
+- Single monthly_snapshot table
+- Fixed 10% and 20% buffer values
+- Flask + SQLite (no ORM)
+- Clean modular structure
+- Application factory pattern
+
+You must refactor the app to support MULTIPLE PORTFOLIOS cleanly and safely.
+
+--------------------------------------------------
+NEW FUNCTIONAL REQUIREMENTS
+--------------------------------------------------
+
+1. The system must support multiple portfolios.
+
+Each portfolio:
+- Has a name
+- Has its own historical records
+- Is selectable from a dropdown
+- Has its own dashboard section
+
+2. Each portfolio record must store:
+
+- snapshot_date
+- total_value
+- weighted_return
+- annual_earnings
+- msfi
+- buffer_1_percent
+- buffer_2_percent
+- buffer_1_value
+- buffer_2_value
+- actual_income
+- risk_status
+- notes
+
+3. Buffers must be configurable per portfolio.
+
+- Default values: 10% and 20%
+- User must be able to modify buffer percentages for future calculations.
+- IMPORTANT: Past records must retain the buffer percentages and calculated values that existed at the time they were created.
+- However, user must be able to manually edit a past snapshot record to correct errors.
+
+4. Risk calculation must use the buffer values stored with that snapshot (not recalculated globally).
+
+--------------------------------------------------
+DATABASE DESIGN REQUIREMENTS
+--------------------------------------------------
+
+Refactor database schema as follows:
+
+Table: portfolios
+- id (PK)
+- name (unique, not null)
+- buffer_1_percent
+- buffer_2_percent
+- created_at
+
+Table: snapshots
+- id (PK)
+- portfolio_id (FK → portfolios.id)
+- snapshot_date
+- total_value
+- weighted_return
+- annual_earnings
+- msfi
+- buffer_1_percent
+- buffer_2_percent
+- buffer_1_value
+- buffer_2_value
+- actual_income
+- risk_status
+- notes
+- created_at
+
+Use foreign key constraints.
+Use parameterized SQL only.
+No ORM.
+
+--------------------------------------------------
+ARCHITECTURE REQUIREMENTS
+--------------------------------------------------
+
+- Maintain modular structure.
+- Keep calculation logic pure in calculations.py.
+- Risk evaluation must accept:
+      msfi,
+      actual_income,
+      buffer_1_value,
+      buffer_2_value
+
+- Add CRUD functionality:
+      - Create portfolio
+      - Edit portfolio buffer percentages
+      - Add snapshot
+      - Edit snapshot
+      - Delete snapshot (with confirmation)
+
+- UI must display portfolios in separate dashboard sections.
+- Include portfolio selector dropdown in navigation bar.
+
+--------------------------------------------------
+UI REQUIREMENTS
+--------------------------------------------------
+
+Use Bootstrap 5.
+
+For each portfolio dashboard:
+- Show latest snapshot summary card
+- Show buffer percentages currently active
+- Show “Edit Buffers” button
+- Show chart for that portfolio only
+
+Add:
+- Portfolio management page
+- Snapshot edit page
+
+--------------------------------------------------
+BUFFER LOGIC RULES
+--------------------------------------------------
+
+When creating a new snapshot:
+
+1. Read buffer percentages from portfolio table.
+2. Store those percentages inside the snapshot record.
+3. Calculate:
+       buffer_1_value = msfi × (1 - buffer_1_percent)
+       buffer_2_value = msfi × (1 - buffer_2_percent)
+4. Store calculated values in snapshot table.
+5. Calculate risk using stored values.
+
+When editing a past snapshot:
+- Allow editing of:
+      total_value
+      weighted_return
+      actual_income
+      buffer percentages
+- Recalculate dependent values for that snapshot only.
+- Do NOT affect other snapshots.
+
+--------------------------------------------------
+DATA INTEGRITY RULES
+--------------------------------------------------
+
+- Historical snapshot calculations must remain stable unless explicitly edited.
+- Changing portfolio buffer percentages only affects FUTURE snapshots.
+- Use transactions where appropriate.
+- Round monetary values to 2 decimals.
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+1. Provide full updated project file structure.
+2. Provide all updated Python modules.
+3. Provide updated SQL schema creation logic.
+4. Provide updated templates.
+5. Include migration logic for existing single-portfolio database.
+6. Include README update explaining:
+       - How multi-portfolio works
+       - How buffer modification works
+       - How historical integrity is preserved
+
+--------------------------------------------------
+
+Do not over-engineer.
+Do not introduce ORMs.
+Do not introduce unnecessary abstractions.
+Keep the system simple, readable, and maintainable.
+
+Focus on correctness, clarity, and financial data integrity.
